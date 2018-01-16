@@ -39,8 +39,8 @@ namespace Qingyi
 
         private SparseArray<IZone> _zones;
 
-        [RunParameter("RequireLicense", true, "Does the mode require the driver to have a license?")]
-        public bool RequireLicense;
+        [RunParameter("Speed" , 5.0f, "The expected speed of the mode (km/h).")]
+        public float Speed;
 
         [RunParameter("Constant", 0.0f, "The modal constant")]
         public float BConst;
@@ -48,12 +48,16 @@ namespace Qingyi
         [RunParameter("IVTT", 0.0f, "The in vehicle travel time.")]
         public float BIvtt;
 
+        private double _convertUtil;
+
+        public float[][] _distances;
+
         public double CalculateV(ITrip trip)
         {
             var start = trip.ActivityStartTime;
             var origin = _zones.GetFlatIndex(trip.OriginalZone.ZoneNumber);
             var dest = _zones.GetFlatIndex(trip.DestinationZone.ZoneNumber);
-            return BConst + BIvtt * ivtt + BCost * cost;
+            return BConst + _convertUtil * _distances[origin][dest];
         }
 
         public float CalculateV(IZone origin, IZone destination, Time time)
@@ -68,11 +72,6 @@ namespace Qingyi
 
         public bool Feasible(ITrip trip)
         {
-            if (RequireLicense)
-            {
-                var person = trip.TripChain.Person;
-                return person.Licence && person.Household.Vehicles.Length > 0;
-            }
             return true;
         }
 
@@ -117,6 +116,8 @@ namespace Qingyi
         public void IterationStarting(int iterationNumber, int maxIterations)
         {
             _zones = Root.ZoneSystem.ZoneArray;
+            _distances = Root.ZoneSystem.Distances.GetFlatData();
+            _convertUtil = BIvtt / ((Speed * 1000.0) / 60.0);
         }
     }
 }
