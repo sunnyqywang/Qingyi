@@ -14,7 +14,7 @@ namespace Qingyi
     {
         [RootModule]
         public ITashaRuntime Root;
-
+         
         public IVehicleType RequiresVehicle => null;
 
         public double VarianceScale { get => 1.0; set { } }
