@@ -53,6 +53,15 @@ namespace Qingyi
         [RunParameter("Wait", 0.0f, "The wait time.")]
         public float BWait;
 
+        [RunParameter("ToCentre", 0.0f, "Distance to city centre (represented by cost).")]
+        public float BToCentre;
+
+        [RunParameter("Home-based Other", 0.0f, "Whether this is an Home-based Other trip.")]
+        public float BHO;
+
+        [RunParameter("CityCentreZone", 54, "Zone number of City Centre.")]
+        public int citycentre;
+
         [SubModelInformation(Required = false, Description = "The time waiting before starting a trip.")]
         public IDataSource<SparseArray<float>> WaitTime;
 
@@ -64,9 +73,22 @@ namespace Qingyi
             var start = trip.ActivityStartTime;
             var origin = _zones.GetFlatIndex(trip.OriginalZone.ZoneNumber);
             var dest = _zones.GetFlatIndex(trip.DestinationZone.ZoneNumber);
-            float ivtt, cost;
+            float ivtt, cost, ivtt_tc, cost_tc;
             var travelData = _network.GetAllData(origin, dest, start, out ivtt, out cost);
-            return BConst + BIvtt * ivtt + BCost * cost + BWait * _waitTimes[origin];
+            int HO;
+            if (!RequireLicense)
+            {
+                HO = Convert.ToInt16(trip.Purpose == Activity.IndividualOther);
+                var centre = _zones.GetFlatIndex(citycentre);
+                var toCentre = _network.GetAllData(origin, centre, start, out ivtt_tc, out cost_tc);
+                cost = cost / (float) 0.153 * (float) 1.75 + (float) 4.25;
+            }
+            else
+            {
+                HO = 0;
+                cost_tc = 0;
+            }
+            return BConst + BIvtt * ivtt + BCost * cost + BWait * _waitTimes[origin] + BToCentre * cost_tc + BHO * HO;
         }
 
         public float CalculateV(IZone origin, IZone destination, Time time)
