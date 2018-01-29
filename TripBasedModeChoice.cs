@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 using XTMF;
 using Tasha.Common;
+
 using TMG.Input;
+
 
 namespace Qingyi
 {
@@ -25,14 +29,73 @@ namespace Qingyi
         [SubModelInformation(Required = false, Description = "The location to save trip records to (Hhld,Person,Trip,[ModeProbabilities])")]
         public FileLocation SaveTripTo;
 
+        private bool _writeThisIteration;
+
+        struct DataToWrite
+        {
+            internal readonly int HhldID;
+            internal readonly int PersonID;
+            internal readonly int TripID;
+            internal readonly int[] ModesChosen;
+
+            public DataToWrite(ITashaMode[] allModes, int hhldID, int personID, int tripID, ITashaMode[] modesChosen)
+            {
+                HhldID = hhldID;
+                PersonID = personID;
+                TripID = tripID;
+                ModesChosen = new int[allModes.Length];
+                for (int i = 0; i < modesChosen.Length; i++)
+                {
+                    ModesChosen[Array.IndexOf(allModes, modesChosen[i])]++;
+                }
+            }
+        }
+
+        private BlockingCollection<DataToWrite> _tripStorageQueue;
+        private Task _StoreTrips;
+
         public void IterationFinished(int iteration, int totalIterations)
         {
-
+            _tripStorageQueue?.CompleteAdding();
+            _StoreTrips?.Wait();            
+            _tripStorageQueue?.Dispose();
+            _tripStorageQueue = null;
         }
 
         public void IterationStarted(int iteration, int totalIterations)
         {
-
+            _writeThisIteration = (iteration == totalIterations - 1) && SaveTripTo != null;
+            if(_writeThisIteration)
+            {
+                _tripStorageQueue = new BlockingCollection<DataToWrite>();
+                _StoreTrips = Task.Factory.StartNew(() =>
+                {
+                    using (var writer = new StreamWriter(SaveTripTo))
+                    {
+                        writer.Write("HhldID,PersonID,TripID");
+                        for (int i = 0; i < _allModes.Length; i++)
+                        {
+                            writer.Write(',');
+                            writer.Write(_allModes[i].ModeName);
+                        }
+                        writer.WriteLine();
+                        foreach (var trip in _tripStorageQueue.GetConsumingEnumerable())
+                        {
+                            writer.Write(trip.HhldID);
+                            writer.Write(',');
+                            writer.Write(trip.PersonID);
+                            writer.Write(',');
+                            writer.Write(trip.TripID);
+                            for (int i = 0; i < trip.ModesChosen.Length; i++)
+                            {
+                                writer.Write(',');
+                                writer.Write(trip.ModesChosen[i]);
+                            }
+                            writer.WriteLine();
+                        }
+                    }
+                }, TaskCreationOptions.LongRunning);
+            }
         }
 
         public void LoadOneTimeLocalData()
@@ -47,18 +110,19 @@ namespace Qingyi
             Random r = new Random(household.HouseholdId * 128732489);
             foreach (var person in household.Persons)
             {
+                int tripNumber = 1;
                 foreach (var tripChain in person.TripChains)
                 {
                     foreach (var trip in tripChain.Trips)
                     {
-                        TripModeChoice(r, trip, v, temp);
+                        TripModeChoice(r, trip, v, temp, tripNumber++);
                     }
                 }
             }
             return true;
         }
 
-        private bool TripModeChoice(Random random, ITrip trip, double[] pOfMode, bool[] temp)
+        private bool TripModeChoice(Random random, ITrip trip, double[] pOfMode, bool[] temp, int tripNumber)
         {
 
             for (int i = 0; i < _allModes.Length; i++)
@@ -117,6 +181,12 @@ namespace Qingyi
                         break;
                     }
                 }
+            }
+            if(_writeThisIteration)
+            {
+                var person = trip.TripChain.Person;
+                var hhld = person.Household;
+                _tripStorageQueue.Add(new DataToWrite(_allModes, hhld.HouseholdId, person.Id, tripNumber, mc));
             }
             return true;
         }

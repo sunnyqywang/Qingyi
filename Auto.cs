@@ -24,7 +24,7 @@ namespace Qingyi
 
         public bool NonPersonalVehicle => throw new NotImplementedException();
 
-        public float CurrentlyFeasible { get => 1.0f;  set { } }
+        public float CurrentlyFeasible { get => 1.0f; set { } }
 
         [RunParameter("Mode Name", "Auto", "The name of the mode")]
         public string ModeName { get; set; }
@@ -33,7 +33,7 @@ namespace Qingyi
 
         public float Progress => 0.0f;
 
-        public Tuple<byte, byte, byte> ProgressColour => new Tuple<byte, byte, byte>(50,150,50);
+        public Tuple<byte, byte, byte> ProgressColour => new Tuple<byte, byte, byte>(50, 150, 50);
 
         private INetworkData _network;
 
@@ -56,8 +56,29 @@ namespace Qingyi
         [RunParameter("ToCentre", 0.0f, "Distance to city centre (represented by cost).")]
         public float BToCentre;
 
-        [RunParameter("Home-based Other", 0.0f, "Whether this is an Home-based Other trip.")]
+        [RunParameter("PurposeOther", 0.0f, "Whether this is an Other-related trip.")]
         public float BHO;
+
+        [RunParameter("ONTrip", 0.0f, "Whether this is an overnight trip.")]
+        public float BON;
+
+        [RunParameter("AgeConstant1", 0.0f, "Age under 20")]
+        public float BAge1;
+
+        [RunParameter("AgeConstant2", 0.0f, "Age 20-29")]
+        public float BAge2;
+
+        [RunParameter("AgeConstant3", 0.0f, "Age 30-59")]
+        public float BAge3;
+
+        [RunParameter("AgeConstant4", 0.0f, "Age 60-69")]
+        public float BAge4;
+
+        [RunParameter("AgeConstant5", 0.0f, "Age 70-79")]
+        public float BAge5;
+
+        [RunParameter("AgeConstant6", 0.0f, "Age 80-99")]
+        public float BAge6;
 
         [RunParameter("CityCentreZone", 54, "Zone number of City Centre.")]
         public int citycentre;
@@ -68,27 +89,59 @@ namespace Qingyi
         [RunParameter("Cost", 0.0f, "The cost of the trip.")]
         public float BCost;
 
+        /// <summary>
+        /// The flat index for the city centre
+        /// </summary>
+        private int _centreIndex;
+
         public double CalculateV(ITrip trip)
         {
             var start = trip.ActivityStartTime;
             var origin = _zones.GetFlatIndex(trip.OriginalZone.ZoneNumber);
             var dest = _zones.GetFlatIndex(trip.DestinationZone.ZoneNumber);
-            float ivtt, cost, ivtt_tc, cost_tc;
+            float ivtt, cost, ivtt_tc, cost_tc = 0;
             var travelData = _network.GetAllData(origin, dest, start, out ivtt, out cost);
-            int HO;
+            var v = BConst;
             if (!RequireLicense)
             {
-                HO = Convert.ToInt16(trip.Purpose == Activity.IndividualOther);
-                var centre = _zones.GetFlatIndex(citycentre);
-                var toCentre = _network.GetAllData(origin, centre, start, out ivtt_tc, out cost_tc);
-                cost = cost / (float) 0.153 * (float) 1.75 + (float) 4.25;
+                if(trip.Purpose == Activity.IndividualOther)
+                {
+                    v += BHO;
+                }
+                if(start.Hours > 24 || start.Hours < 6)
+                {
+                    v += BON;
+                }
+                int age = trip.TripChain.Person.Age;
+                if (age < 20)
+                {
+                    v += BAge1;
+                }
+                else if (age < 30)
+                {
+                    v += BAge2;
+                }
+                else if (age < 60)
+                {
+                    v += BAge3;
+                }
+                else if (age < 70)
+                {
+                    v += BAge4;
+                }
+                else if (age < 80)
+                {
+                    v += BAge5;
+                }
+                else
+                {
+                    v += BAge6;
+                }
+                var toCentre = _network.GetAllData(origin, _centreIndex, start, out ivtt_tc, out cost_tc);
+                v += BToCentre * cost_tc;
+                cost = cost / (float)0.153 * (float)1.75 + (float)4.25;
             }
-            else
-            {
-                HO = 0;
-                cost_tc = 0;
-            }
-            return BConst + BIvtt * ivtt + BCost * cost + BWait * _waitTimes[origin] + BToCentre * cost_tc + BHO * HO;
+            return BIvtt * ivtt + BCost * cost + BWait * _waitTimes[origin];
         }
 
         public float CalculateV(IZone origin, IZone destination, Time time)
@@ -123,15 +176,15 @@ namespace Qingyi
 
         public bool RuntimeValidation(ref string error)
         {
-            foreach(var network in Root.NetworkData)
+            foreach (var network in Root.NetworkData)
             {
-                if(network.NetworkType == NetworkType)
+                if (network.NetworkType == NetworkType)
                 {
                     _network = network;
                     break;
                 }
             }
-            if(_network == null)
+            if (_network == null)
             {
                 error = $"In {Name} we were unable to find a network with the name {NetworkType} to gather travel information.";
                 return false;
@@ -152,6 +205,7 @@ namespace Qingyi
         public void IterationStarting(int iterationNumber, int maxIterations)
         {
             _zones = Root.ZoneSystem.ZoneArray;
+            _centreIndex = _zones.GetFlatIndex(citycentre);
             WaitTime.LoadData();
             _waitTimes = WaitTime.GiveData();
         }
