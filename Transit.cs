@@ -54,6 +54,27 @@ namespace Qingyi
         [RunParameter("Cost", 0.0f, "The cost of the trip.")]
         public float BCost;
 
+        [RunParameter("NoVehicle", 0.0f, "Whether the household has a vehicle.")]
+        public float BVeh;
+
+        [RunParameter("AgeConstant1", 0.0f, "Age under 20")]
+        public float BAge1;
+
+        [RunParameter("AgeConstant2", 0.0f, "Age 20-29")]
+        public float BAge2;
+
+        [RunParameter("AgeConstant3", 0.0f, "Age 30-59")]
+        public float BAge3;
+
+        [RunParameter("AgeConstant4", 0.0f, "Age 60-69")]
+        public float BAge4;
+
+        [RunParameter("AgeConstant5", 0.0f, "Age 70-79")]
+        public float BAge5;
+
+        [RunParameter("AgeConstant6", 0.0f, "Age 80-99")]
+        public float BAge6;
+
         public double CalculateV(ITrip trip)
         {
             var start = trip.ActivityStartTime;
@@ -61,7 +82,41 @@ namespace Qingyi
             var dest = _zones.GetFlatIndex(trip.DestinationZone.ZoneNumber);
             float ivtt, cost, walk, wait, boarding;
             var travelData = _network.GetAllData(origin, dest, start, out ivtt, out walk, out wait, out boarding, out cost);
-            return BConst + BIvtt * ivtt + BCost * cost + BWait * wait + BWalk * walk;
+            var person = trip.TripChain.Person;
+            var v = BConst;
+            int age = trip.TripChain.Person.Age;
+            if (age < 20)
+            {
+                v += BAge1;
+            }
+            else if (age < 30)
+            {
+                v += BAge2;
+            }
+            else if (age < 60)
+            {
+                v += BAge3;
+            }
+            else if (age < 70)
+            {
+                v += BAge4;
+            }
+            else if (age < 80)
+            {
+                v += BAge5;
+            }
+            else
+            {
+                v += BAge6;
+            }
+
+            if (person.Household.Vehicles.Length > 0)
+            {
+                v += BVeh;
+            }
+           
+            return v + BIvtt * ivtt + BCost * cost + BWait * wait + BWalk * walk;
+
         }
 
         public float CalculateV(IZone origin, IZone destination, Time time)

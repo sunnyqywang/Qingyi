@@ -59,8 +59,23 @@ namespace Qingyi
         [RunParameter("PurposeOther", 0.0f, "Whether this is an Other-related trip.")]
         public float BHO;
 
-        [RunParameter("ONTrip", 0.0f, "Whether this is an overnight trip.")]
+        [RunParameter("License", 0.0f, "Whether the trip-maker has a license.")]
+        public float BLicense;
+
+        [RunParameter("EmploymentStatus", 0.0f, "Whether the trip-maker is unemployed/work from home.")]
+        public float BEmployment;
+
+        [RunParameter("ONTrip", 0.0f, "Overnight trip. [24 - 6)")]
         public float BON;
+
+        [RunParameter("EVTrip", 0.0f, "Evening trip. [19 - 24)")]
+        public float BEV;
+
+        [RunParameter("PMTrip", 0.0f, "PM trip. [15, 19)")]
+        public float BPM;
+
+        [RunParameter("MDTrip", 0.0f, "Midday trip. [9, 15)")]
+        public float BMD;
 
         [RunParameter("AgeConstant1", 0.0f, "Age under 20")]
         public float BAge1;
@@ -77,7 +92,7 @@ namespace Qingyi
         [RunParameter("AgeConstant5", 0.0f, "Age 70-79")]
         public float BAge5;
 
-        [RunParameter("AgeConstant6", 0.0f, "Age 80-99")]
+        [RunParameter("AgeConstant6", 0.0f, "Age 80-89")]
         public float BAge6;
 
         [RunParameter("CityCentreZone", 54, "Zone number of City Centre.")]
@@ -108,10 +123,32 @@ namespace Qingyi
                 {
                     v += BHO;
                 }
-                if(start.Hours > 24 || start.Hours < 6)
+
+                if (!trip.TripChain.Person.Licence)
+                {
+                    v += BLicense;
+                }
+
+                if (trip.TripChain.Person.EmploymentStatus == TTSEmploymentStatus.NotEmployed || trip.TripChain.Person.EmploymentStatus == TTSEmploymentStatus.WorkAtHome_FullTime || trip.TripChain.Person.EmploymentStatus == TTSEmploymentStatus.WorkAtHome_PartTime)
+                {
+                    v += BEmployment;
+                }
+
+                if(start.Hours >= 24 || start.Hours < 6)
                 {
                     v += BON;
+                }else if (start.Hours >= 19 || start.Hours < 24)
+                {
+                    v += BEV;
+                } else if (start.Hours >= 15 || start.Hours < 19)
+                {
+                    v += BPM;
                 }
+                else if(start.Hours >= 9 || start.Hours < 15)
+                {
+                    v += BMD;
+                }
+
                 int age = trip.TripChain.Person.Age;
                 if (age < 20)
                 {
@@ -133,7 +170,7 @@ namespace Qingyi
                 {
                     v += BAge5;
                 }
-                else
+                else if (age < 90)
                 {
                     v += BAge6;
                 }
@@ -141,7 +178,8 @@ namespace Qingyi
                 v += BToCentre * cost_tc;
                 cost = cost / (float)0.153 * (float)1.75 + (float)4.25;
             }
-            return BIvtt * ivtt + BCost * cost + BWait * _waitTimes[origin];
+
+            return v + BIvtt * ivtt + BCost * cost + BWait * _waitTimes[origin];
         }
 
         public float CalculateV(IZone origin, IZone destination, Time time)
