@@ -54,8 +54,8 @@ namespace Qingyi
         [RunParameter("Cost", 0.0f, "The cost of the trip.")]
         public float BCost;
 
-        [RunParameter("NoVehicle", 0.0f, "Whether the household has a vehicle.")]
-        public float BVeh;
+        [RunParameter("License", 0.0f, "Whether the trip-maker has a license.")]
+        public float BLicense;
 
         [RunParameter("AgeConstant1", 0.0f, "Age under 20")]
         public float BAge1;
@@ -110,11 +110,11 @@ namespace Qingyi
                 v += BAge6;
             }
 
-            if (person.Household.Vehicles.Length > 0)
+            if (!trip.TripChain.Person.Licence)
             {
-                v += BVeh;
+                v += BLicense;
             }
-           
+
             return v + BIvtt * ivtt + BCost * cost + BWait * wait + BWalk * walk;
 
         }

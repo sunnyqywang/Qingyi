@@ -48,8 +48,8 @@ namespace Qingyi
         [RunParameter("IVTT", 0.0f, "The in vehicle travel time.")]
         public float BIvtt;
 
-        [RunParameter("NoVehicle", 0.0f, "Whether the household has a vehicle.")]
-        public float BVeh;
+        [RunParameter("License", 0.0f, "Whether the trip-maker has a license.")]
+        public float BLicense;
 
         private double _convertUtil;
 
@@ -61,14 +61,15 @@ namespace Qingyi
             var origin = _zones.GetFlatIndex(trip.OriginalZone.ZoneNumber);
             var dest = _zones.GetFlatIndex(trip.DestinationZone.ZoneNumber);
             var person = trip.TripChain.Person;
-            if (person.Household.Vehicles.Length > 0)
+            var v = BConst;
+
+            if (!trip.TripChain.Person.Licence)
             {
-                return BConst + _convertUtil * _distances[origin][dest] + BVeh;
+                v += BLicense;
             }
-            else
-            {
-                return BConst + _convertUtil * _distances[origin][dest];
-            }
+
+            return v + _convertUtil * _distances[origin][dest];
+            
         }
 
         public float CalculateV(IZone origin, IZone destination, Time time)
